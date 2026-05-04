@@ -164,6 +164,37 @@
 
     .goal-item.completed .goal-text {
       text-decoration: line-through;
+      color: #10b981;
+    }
+
+    .goal-item.failed .goal-text {
+      text-decoration: line-through;
+      color: #ef4444;
+    }
+
+    .goal-status-btn {
+      padding: 6px 10px;
+      background: #edf2f7;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-right: 4px;
+    }
+
+    .goal-status-btn:hover {
+      background: #e2e8f0;
+    }
+
+    .goal-status-btn.active-complete {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .goal-status-btn.active-fail {
+      background: #fee2e2;
+      color: #991b1b;
     }
 
     .checkbox {
@@ -324,26 +355,28 @@
 
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchPage('today')">Today</button>
-      <button class="nav-tab" onclick="switchPage('recurring')">Recurring Tasks</button>
-      <button class="nav-tab" onclick="switchPage('stats')">Statistics</button>
+      <button class="nav-tab" onclick="switchPage('tomorrow')">Tomorrow</button>
+      <button class="nav-tab" onclick="switchPage('regular')">Regular Tasks</button>
+      <button class="nav-tab" onclick="switchPage('stats')">Stats</button>
       <button class="nav-tab" onclick="switchPage('notes')">Notes</button>
     </div>
 
     <div id="todayPage" class="page active">
       <div class="card">
-        <h2>Daily Goals</h2>
+        <h2>Today's Goals</h2>
+        <div id="allTodayGoalsList"></div>
+      </div>
+
+      <div class="card">
+        <h2>Add Goal for Today</h2>
         <div class="input-group">
           <input type="text" id="goalInput" placeholder="Add a goal for today...">
           <button class="btn" onclick="addGoal()">Add</button>
         </div>
-        <div id="goalsList"></div>
       </div>
+    </div>
 
-      <div class="card">
-        <h2>Today's Recurring Tasks</h2>
-        <div id="recurringTasksList"></div>
-      </div>
-
+    <div id="tomorrowPage" class="page">
       <div class="card">
         <h2>Plan for Tomorrow</h2>
         <div class="input-group">
@@ -354,14 +387,40 @@
       </div>
     </div>
 
-    <div id="recurringPage" class="page">
+    <div id="regularPage" class="page">
       <div class="card">
-        <h2>Recurring Tasks</h2>
-        <div class="input-group">
-          <input type="text" id="recurringTaskInput" placeholder="E.g., Meditate for 10 mins">
-          <button class="btn" onclick="addRecurringTask()">Add Daily Task</button>
+        <h2>Regular Tasks</h2>
+        <div class="input-group" style="display: block;">
+          <input type="text" id="regularTaskInput" placeholder="E.g., Meditate for 10 mins" style="width: 100%; margin-bottom: 12px;">
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 14px; color: #4a5568; margin-bottom: 8px;">Select days:</div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 13px;">
+                <input type="checkbox" class="weekday-check" value="1"> Mon
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 13px;">
+                <input type="checkbox" class="weekday-check" value="2"> Tue
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 13px;">
+                <input type="checkbox" class="weekday-check" value="3"> Wed
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 13px;">
+                <input type="checkbox" class="weekday-check" value="4"> Thu
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 13px;">
+                <input type="checkbox" class="weekday-check" value="5"> Fri
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 13px;">
+                <input type="checkbox" class="weekday-check" value="6"> Sat
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 13px;">
+                <input type="checkbox" class="weekday-check" value="0"> Sun
+              </label>
+            </div>
+          </div>
+          <button class="btn" onclick="addRegularTask()" style="width: 100%;">Add Regular Task</button>
         </div>
-        <div id="recurringTasksManager"></div>
+        <div id="regularTasksManager"></div>
       </div>
     </div>
 
@@ -418,7 +477,7 @@
     const DATA_KEY = 'dailyGoalsTrackerData';
     let data = {
       goals: {},
-      recurringTasks: [],
+      regularTasks: [],
       notes: {},
       tomorrowGoals: []
     };
@@ -427,6 +486,7 @@
       const stored = localStorage.getItem(DATA_KEY);
       if (stored) {
         data = JSON.parse(stored);
+        if (!data.regularTasks) data.regularTasks = [];
       }
     }
 
@@ -460,20 +520,22 @@
       if (page === 'today') {
         document.getElementById('todayPage').classList.add('active');
         document.querySelector('.nav-tab:nth-child(1)').classList.add('active');
-        renderGoals();
-        renderRecurringTasksForToday();
-        renderTomorrowGoals();
-      } else if (page === 'recurring') {
-        document.getElementById('recurringPage').classList.add('active');
+        renderAllTodayGoals();
+      } else if (page === 'tomorrow') {
+        document.getElementById('tomorrowPage').classList.add('active');
         document.querySelector('.nav-tab:nth-child(2)').classList.add('active');
-        renderRecurringTasksManager();
+        renderTomorrowGoals();
+      } else if (page === 'regular') {
+        document.getElementById('regularPage').classList.add('active');
+        document.querySelector('.nav-tab:nth-child(3)').classList.add('active');
+        renderRegularTasksManager();
       } else if (page === 'stats') {
         document.getElementById('statsPage').classList.add('active');
-        document.querySelector('.nav-tab:nth-child(3)').classList.add('active');
+        document.querySelector('.nav-tab:nth-child(4)').classList.add('active');
         updateStats('week');
       } else if (page === 'notes') {
         document.getElementById('notesPage').classList.add('active');
-        document.querySelector('.nav-tab:nth-child(4)').classList.add('active');
+        document.querySelector('.nav-tab:nth-child(5)').classList.add('active');
         loadTodayNote();
         renderNotesList();
       }
@@ -492,138 +554,183 @@
       data.goals[today].push({
         id: Date.now(),
         text: text,
-        completed: false,
+        status: null,
+        isRegularTask: false,
         createdAt: new Date().toISOString()
       });
 
       input.value = '';
       saveData();
-      renderGoals();
+      renderAllTodayGoals();
     }
 
-    function toggleGoal(date, id) {
+    function setGoalStatus(date, id, status) {
       const goal = data.goals[date].find(g => g.id === id);
       if (goal) {
-        goal.completed = !goal.completed;
+        if (goal.status === status) {
+          goal.status = null;
+        } else {
+          goal.status = status;
+        }
         saveData();
-        renderGoals();
+        renderAllTodayGoals();
       }
     }
 
     function deleteGoal(date, id) {
       data.goals[date] = data.goals[date].filter(g => g.id !== id);
       saveData();
-      renderGoals();
+      renderAllTodayGoals();
     }
 
-    function renderGoals() {
+    function renderAllTodayGoals() {
       const today = getToday();
-      const container = document.getElementById('goalsList');
+      const container = document.getElementById('allTodayGoalsList');
       
-      if (!data.goals[today] || data.goals[today].length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎯</div><div>No goals for today yet. Add one above!</div></div>';
-        return;
-      }
+      const todaysDayOfWeek = new Date().getDay();
+      const regularTasksForToday = data.regularTasks.filter(task => 
+        task.weekdays.includes(todaysDayOfWeek)
+      );
 
-      container.innerHTML = data.goals[today].map(goal => `
-        <div class="goal-item ${goal.completed ? 'completed' : ''}">
-          <input type="checkbox" class="checkbox" ${goal.completed ? 'checked' : ''} 
-                 onchange="toggleGoal('${today}', ${goal.id})">
-          <div class="goal-text">${goal.text}</div>
-          <button class="delete-btn" onclick="deleteGoal('${today}', ${goal.id})">Delete</button>
-        </div>
-      `).join('');
-    }
-
-    function addRecurringTask() {
-      const input = document.getElementById('recurringTaskInput');
-      const text = input.value.trim();
-      if (!text) return;
-
-      data.recurringTasks.push({
-        id: Date.now(),
-        text: text,
-        createdAt: new Date().toISOString()
+      const regularGoalsForToday = regularTasksForToday.map(task => {
+        const existingGoal = data.goals[today]?.find(g => g.regularTaskId === task.id);
+        if (existingGoal) {
+          return existingGoal;
+        }
+        return {
+          id: 'regular_' + task.id,
+          text: task.text,
+          status: null,
+          isRegularTask: true,
+          regularTaskId: task.id
+        };
       });
 
-      input.value = '';
-      saveData();
-      renderRecurringTasksManager();
-      renderRecurringTasksForToday();
-    }
+      const dailyGoals = data.goals[today]?.filter(g => !g.isRegularTask) || [];
+      const allGoals = [...regularGoalsForToday, ...dailyGoals];
 
-    function deleteRecurringTask(id) {
-      data.recurringTasks = data.recurringTasks.filter(t => t.id !== id);
-      saveData();
-      renderRecurringTasksManager();
-      renderRecurringTasksForToday();
-    }
-
-    function renderRecurringTasksManager() {
-      const container = document.getElementById('recurringTasksManager');
-      
-      if (data.recurringTasks.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div>No recurring tasks yet. Add daily tasks above!</div></div>';
+      if (allGoals.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎯</div><div>No goals for today yet. Add one below!</div></div>';
         return;
       }
 
-      container.innerHTML = data.recurringTasks.map(task => `
-        <div class="task-item">
-          <div class="task-text">
-            <span class="recurring-badge">DAILY</span> ${task.text}
+      container.innerHTML = allGoals.map(goal => {
+        const goalClass = goal.status === 'completed' ? 'completed' : goal.status === 'failed' ? 'failed' : '';
+        const completeClass = goal.status === 'completed' ? 'active-complete' : '';
+        const failClass = goal.status === 'failed' ? 'active-fail' : '';
+        
+        const onComplete = goal.isRegularTask ? 
+          `handleRegularTaskStatus(${goal.regularTaskId}, 'completed')` : 
+          `setGoalStatus('${today}', ${goal.id}, 'completed')`;
+        
+        const onFail = goal.isRegularTask ? 
+          `handleRegularTaskStatus(${goal.regularTaskId}, 'failed')` : 
+          `setGoalStatus('${today}', ${goal.id}, 'failed')`;
+        
+        const deleteBtn = goal.isRegularTask ? '' : 
+          `<button class="delete-btn" onclick="deleteGoal('${today}', ${goal.id})">Delete</button>`;
+
+        return `
+          <div class="goal-item ${goalClass}">
+            <div class="goal-text">${goal.text}</div>
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <button class="goal-status-btn ${completeClass}" onclick="${onComplete}">✓</button>
+              <button class="goal-status-btn ${failClass}" onclick="${onFail}">✗</button>
+              ${deleteBtn}
+            </div>
           </div>
-          <button class="delete-btn" onclick="deleteRecurringTask(${task.id})">Delete</button>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
-    function toggleRecurringTask(taskId) {
+    function handleRegularTaskStatus(taskId, status) {
       const today = getToday();
       if (!data.goals[today]) {
         data.goals[today] = [];
       }
 
-      const existingIndex = data.goals[today].findIndex(g => g.recurringTaskId === taskId);
+      const existingIndex = data.goals[today].findIndex(g => g.regularTaskId === taskId);
+      
       if (existingIndex >= 0) {
-        data.goals[today][existingIndex].completed = !data.goals[today][existingIndex].completed;
+        const currentStatus = data.goals[today][existingIndex].status;
+        if (currentStatus === status) {
+          data.goals[today].splice(existingIndex, 1);
+        } else {
+          data.goals[today][existingIndex].status = status;
+        }
       } else {
-        const task = data.recurringTasks.find(t => t.id === taskId);
+        const task = data.regularTasks.find(t => t.id === taskId);
         if (task) {
           data.goals[today].push({
             id: Date.now(),
             text: task.text,
-            completed: true,
-            recurringTaskId: taskId,
+            status: status,
+            isRegularTask: true,
+            regularTaskId: taskId,
             createdAt: new Date().toISOString()
           });
         }
       }
 
       saveData();
-      renderRecurringTasksForToday();
+      renderAllTodayGoals();
     }
 
-    function renderRecurringTasksForToday() {
-      const container = document.getElementById('recurringTasksList');
-      const today = getToday();
+    function addRegularTask() {
+      const input = document.getElementById('regularTaskInput');
+      const text = input.value.trim();
+      if (!text) return;
 
-      if (data.recurringTasks.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✨</div><div>No recurring tasks set up yet.</div></div>';
+      const checkboxes = document.querySelectorAll('.weekday-check:checked');
+      const weekdays = Array.from(checkboxes).map(cb => parseInt(cb.value));
+      
+      if (weekdays.length === 0) {
+        alert('Please select at least one day for this task');
         return;
       }
 
-      container.innerHTML = data.recurringTasks.map(task => {
-        const existingGoal = data.goals[today]?.find(g => g.recurringTaskId === task.id);
-        const completed = existingGoal?.completed || false;
+      data.regularTasks.push({
+        id: Date.now(),
+        text: text,
+        weekdays: weekdays,
+        createdAt: new Date().toISOString()
+      });
 
-        return `
-          <div class="goal-item ${completed ? 'completed' : ''}">
-            <input type="checkbox" class="checkbox" ${completed ? 'checked' : ''} 
-                   onchange="toggleRecurringTask(${task.id})">
-            <div class="goal-text">${task.text}</div>
+      input.value = '';
+      document.querySelectorAll('.weekday-check').forEach(cb => cb.checked = false);
+      saveData();
+      renderRegularTasksManager();
+      renderAllTodayGoals();
+    }
+
+    function deleteRegularTask(id) {
+      data.regularTasks = data.regularTasks.filter(t => t.id !== id);
+      saveData();
+      renderRegularTasksManager();
+      renderAllTodayGoals();
+    }
+
+    function getWeekdayNames(weekdays) {
+      const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      return weekdays.sort((a, b) => a - b).map(day => names[day]).join(', ');
+    }
+
+    function renderRegularTasksManager() {
+      const container = document.getElementById('regularTasksManager');
+      
+      if (data.regularTasks.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div>No regular tasks yet. Add tasks above!</div></div>';
+        return;
+      }
+
+      container.innerHTML = data.regularTasks.map(task => `
+        <div class="task-item">
+          <div class="task-text">
+            <span class="recurring-badge">${getWeekdayNames(task.weekdays)}</span> ${task.text}
           </div>
-        `;
-      }).join('');
+          <button class="delete-btn" onclick="deleteRegularTask(${task.id})">Delete</button>
+        </div>
+      `).join('');
     }
 
     function addTomorrowGoal() {
