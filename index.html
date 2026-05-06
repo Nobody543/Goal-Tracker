@@ -48,11 +48,19 @@
       padding: 6px;
       border-radius: 12px;
       backdrop-filter: blur(10px);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .nav-tabs::-webkit-scrollbar {
+      display: none;
     }
 
     .nav-tab {
-      flex: 1;
-      padding: 12px;
+      flex: 0 0 auto;
+      min-width: 80px;
+      padding: 12px 16px;
       background: transparent;
       border: none;
       color: white;
@@ -61,6 +69,7 @@
       border-radius: 8px;
       cursor: pointer;
       transition: all 0.3s ease;
+      white-space: nowrap;
     }
 
     .nav-tab.active {
@@ -376,20 +385,33 @@
       justify-content: space-between;
       align-items: center;
       touch-action: none;
-      cursor: move;
-      transition: all 0.3s ease;
+      cursor: grab;
+      transition: all 0.2s ease;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     .value-item:hover {
       background: #f7fafc;
     }
 
+    .value-item:active {
+      cursor: grabbing;
+    }
+
     .value-item.top10 {
       background: #e6f2ff;
     }
 
+    .value-item.top10:hover {
+      background: #dbeafe;
+    }
+
     .value-item.dragging {
       opacity: 0.5;
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      cursor: grabbing;
     }
 
     .value-name {
@@ -1393,6 +1415,8 @@
 
     // VALUES PAGE FUNCTIONS
     let valueDragIndex = null;
+    let isDragging = false;
+    let dragStartY = 0;
 
     function renderValues() {
       const container = document.getElementById('valuesList');
@@ -1401,6 +1425,7 @@
       data.values.forEach((value, i) => {
         const div = document.createElement('div');
         div.className = 'value-item';
+        div.setAttribute('data-index', i);
         if (i < 10) div.classList.add('top10');
 
         div.innerHTML = `
@@ -1411,25 +1436,15 @@
           </div>
         `;
 
-        // Drag functionality
-        div.addEventListener('pointerdown', () => {
-          valueDragIndex = i;
-          div.classList.add('dragging');
-        });
+        // Touch events for mobile drag and drop
+        div.addEventListener('touchstart', handleTouchStart, { passive: false });
+        div.addEventListener('touchmove', handleTouchMove, { passive: false });
+        div.addEventListener('touchend', handleTouchEnd, { passive: false });
 
-        div.addEventListener('pointerenter', () => {
-          if (valueDragIndex === null) return;
-          const item = data.values.splice(valueDragIndex, 1)[0];
-          data.values.splice(i, 0, item);
-          valueDragIndex = i;
-          saveData();
-          renderValues();
-        });
-
-        div.addEventListener('pointerup', () => {
-          valueDragIndex = null;
-          document.querySelectorAll('.value-item').forEach(el => el.classList.remove('dragging'));
-        });
+        // Mouse events for desktop
+        div.addEventListener('mousedown', handleMouseStart);
+        div.addEventListener('mousemove', handleMouseMove);
+        div.addEventListener('mouseup', handleMouseEnd);
 
         container.appendChild(div);
 
@@ -1440,6 +1455,96 @@
         }
       });
     }
+
+    function handleTouchStart(e) {
+      const item = e.currentTarget;
+      valueDragIndex = parseInt(item.getAttribute('data-index'));
+      isDragging = true;
+      dragStartY = e.touches[0].clientY;
+      item.classList.add('dragging');
+    }
+
+    function handleTouchMove(e) {
+      if (!isDragging || valueDragIndex === null) return;
+      
+      e.preventDefault(); // Prevent scrolling while dragging
+      
+      const touch = e.touches[0];
+      const currentY = touch.clientY;
+      
+      // Find which item we're hovering over
+      const items = document.querySelectorAll('.value-item');
+      let targetIndex = null;
+      
+      items.forEach((item, index) => {
+        const rect = item.getBoundingClientRect();
+        if (currentY >= rect.top && currentY <= rect.bottom) {
+          targetIndex = index;
+        }
+      });
+
+      if (targetIndex !== null && targetIndex !== valueDragIndex) {
+        // Swap the items
+        const item = data.values.splice(valueDragIndex, 1)[0];
+        data.values.splice(targetIndex, 0, item);
+        valueDragIndex = targetIndex;
+        saveData();
+        renderValues();
+      }
+    }
+
+    function handleTouchEnd(e) {
+      isDragging = false;
+      valueDragIndex = null;
+      document.querySelectorAll('.value-item').forEach(el => el.classList.remove('dragging'));
+    }
+
+    // Mouse events for desktop
+    function handleMouseStart(e) {
+      if (e.button !== 0) return; // Only left click
+      const item = e.currentTarget;
+      valueDragIndex = parseInt(item.getAttribute('data-index'));
+      isDragging = true;
+      dragStartY = e.clientY;
+      item.classList.add('dragging');
+    }
+
+    function handleMouseMove(e) {
+      if (!isDragging || valueDragIndex === null) return;
+      
+      const currentY = e.clientY;
+      
+      // Find which item we're hovering over
+      const items = document.querySelectorAll('.value-item');
+      let targetIndex = null;
+      
+      items.forEach((item, index) => {
+        const rect = item.getBoundingClientRect();
+        if (currentY >= rect.top && currentY <= rect.bottom) {
+          targetIndex = index;
+        }
+      });
+
+      if (targetIndex !== null && targetIndex !== valueDragIndex) {
+        // Swap the items
+        const item = data.values.splice(valueDragIndex, 1)[0];
+        data.values.splice(targetIndex, 0, item);
+        valueDragIndex = targetIndex;
+        saveData();
+        renderValues();
+      }
+    }
+
+    function handleMouseEnd(e) {
+      isDragging = false;
+      valueDragIndex = null;
+      document.querySelectorAll('.value-item').forEach(el => el.classList.remove('dragging'));
+    }
+
+    // Global listeners to catch drag end outside elements
+    document.addEventListener('mouseup', handleMouseEnd);
+    document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener('touchcancel', handleTouchEnd);
 
     function moveValueUp(i) {
       if (i === 0) return;
@@ -1474,8 +1579,14 @@
     // SELF HELP PAGE FUNCTIONS
     function addHabit() {
       const input = document.getElementById('habitInput');
+      if (!input) return;
+      
       const text = input.value.trim();
       if (!text) return;
+
+      if (!data.habits) {
+        data.habits = [];
+      }
 
       data.habits.push({
         id: Date.now(),
@@ -1494,6 +1605,12 @@
     }
 
     function deleteHabit(id) {
+      if (!confirm('Delete this habit?')) return;
+      
+      if (!data.habits) {
+        data.habits = [];
+      }
+      
       data.habits = data.habits.filter(h => h.id !== id);
       saveData();
       renderHabits();
@@ -1501,6 +1618,19 @@
 
     function toggleHabit(habitId) {
       const today = getToday();
+      
+      if (!data.selfHelp) {
+        data.selfHelp = {
+          xp: 0,
+          nextRewardDate: null,
+          habitCompletions: {},
+          goodDeeds: []
+        };
+      }
+      
+      if (!data.selfHelp.habitCompletions) {
+        data.selfHelp.habitCompletions = {};
+      }
       
       if (!data.selfHelp.habitCompletions[today]) {
         data.selfHelp.habitCompletions[today] = [];
@@ -1520,179 +1650,256 @@
 
     function renderHabits() {
       const container = document.getElementById('habitsList');
+      if (!container) return;
+      
       const today = getToday();
 
-      if (data.habits.length === 0) {
+      if (!data.habits || data.habits.length === 0) {
         container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🌱</div><div>No habits yet. Add one to start your journey!</div></div>';
         return;
       }
 
-      container.innerHTML = data.habits.map(habit => {
-        const completed = data.selfHelp.habitCompletions[today]?.includes(habit.id) || false;
+      try {
+        container.innerHTML = data.habits.map(habit => {
+          const completed = (data.selfHelp && 
+                            data.selfHelp.habitCompletions && 
+                            data.selfHelp.habitCompletions[today] && 
+                            data.selfHelp.habitCompletions[today].includes(habit.id)) || false;
 
-        return `
-          <div class="habit-item ${completed ? 'completed-today' : ''}">
-            <input type="checkbox" class="checkbox" ${completed ? 'checked' : ''} 
-                   onchange="toggleHabit(${habit.id})">
-            <div class="goal-text">${habit.text}</div>
-            <button class="delete-btn" onclick="deleteHabit(${habit.id})">Delete</button>
-          </div>
-        `;
-      }).join('');
+          return `
+            <div class="habit-item ${completed ? 'completed-today' : ''}">
+              <input type="checkbox" class="checkbox" ${completed ? 'checked' : ''} 
+                     onchange="toggleHabit(${habit.id})">
+              <div class="goal-text">${habit.text}</div>
+              <button class="delete-btn" onclick="deleteHabit(${habit.id})">Delete</button>
+            </div>
+          `;
+        }).join('');
+      } catch (error) {
+        console.error('Error rendering habits:', error);
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>Error loading habits. Please refresh.</div></div>';
+      }
     }
 
     function setNextReward() {
-      const randomDays = Math.floor(Math.random() * 7) + 1; // 1-7 days
-      const nextDate = new Date();
-      nextDate.setDate(nextDate.getDate() + randomDays);
-      data.selfHelp.nextRewardDate = nextDate.toISOString();
-      saveData();
+      try {
+        const randomDays = Math.floor(Math.random() * 7) + 1; // 1-7 days
+        const nextDate = new Date();
+        nextDate.setDate(nextDate.getDate() + randomDays);
+        
+        if (!data.selfHelp) {
+          data.selfHelp = {
+            xp: 0,
+            nextRewardDate: null,
+            habitCompletions: {},
+            goodDeeds: []
+          };
+        }
+        
+        data.selfHelp.nextRewardDate = nextDate.toISOString();
+        saveData();
+      } catch (error) {
+        console.error('Error setting next reward:', error);
+      }
     }
 
     function checkHabitRewards() {
-      if (!data.selfHelp.nextRewardDate) {
-        setNextReward();
-        updateSelfHelpDisplay();
-        return;
-      }
-
-      const now = new Date();
-      const rewardDate = new Date(data.selfHelp.nextRewardDate);
-
-      if (now >= rewardDate) {
-        // Check if they've been consistent
-        const daysToCheck = Math.floor((now - new Date(rewardDate.getTime() - 7 * 24 * 60 * 60 * 1000)) / (24 * 60 * 60 * 1000));
-        let completedDays = 0;
-
-        for (let i = 0; i < daysToCheck; i++) {
-          const checkDate = new Date(now);
-          checkDate.setDate(checkDate.getDate() - i);
-          const dateStr = checkDate.toISOString().split('T')[0];
-          
-          if (data.selfHelp.habitCompletions[dateStr] && data.selfHelp.habitCompletions[dateStr].length > 0) {
-            completedDays++;
-          }
+      try {
+        if (!data.selfHelp) {
+          data.selfHelp = {
+            xp: 0,
+            nextRewardDate: null,
+            habitCompletions: {},
+            goodDeeds: []
+          };
         }
 
-        const consistency = daysToCheck > 0 ? completedDays / daysToCheck : 0;
-
-        if (consistency >= 0.5) {
-          // They qualify for a reward!
-          showReward();
-        } else {
-          // Not enough consistency, set new reward
+        if (!data.selfHelp.nextRewardDate) {
           setNextReward();
           updateSelfHelpDisplay();
+          return;
         }
-      } else {
-        updateSelfHelpDisplay();
+
+        const now = new Date();
+        const rewardDate = new Date(data.selfHelp.nextRewardDate);
+
+        if (now >= rewardDate) {
+          // Check if they've been consistent
+          const daysToCheck = Math.min(7, Math.floor((now - new Date(rewardDate.getTime() - 7 * 24 * 60 * 60 * 1000)) / (24 * 60 * 60 * 1000)));
+          let completedDays = 0;
+
+          for (let i = 0; i < daysToCheck; i++) {
+            const checkDate = new Date(now);
+            checkDate.setDate(checkDate.getDate() - i);
+            const dateStr = checkDate.toISOString().split('T')[0];
+            
+            if (data.selfHelp.habitCompletions[dateStr] && data.selfHelp.habitCompletions[dateStr].length > 0) {
+              completedDays++;
+            }
+          }
+
+          const consistency = daysToCheck > 0 ? completedDays / daysToCheck : 0;
+
+          if (consistency >= 0.5) {
+            // They qualify for a reward!
+            showReward();
+          } else {
+            // Not enough consistency, set new reward
+            setNextReward();
+            updateSelfHelpDisplay();
+          }
+        } else {
+          updateSelfHelpDisplay();
+        }
+      } catch (error) {
+        console.error('Error checking habit rewards:', error);
       }
     }
 
     function showReward() {
-      const goodDeed = generateGoodDeed();
-      const xpGain = Math.floor(Math.random() * 50) + 50; // 50-100 XP
+      try {
+        const goodDeed = generateGoodDeed();
+        const xpGain = Math.floor(Math.random() * 50) + 50; // 50-100 XP
 
-      document.getElementById('rewardMessage').style.display = 'block';
-      document.getElementById('rewardText').innerHTML = `
-        <div style="margin-bottom: 8px;"><strong>+${xpGain} XP!</strong></div>
-        <div><strong>Good Deed:</strong> ${goodDeed}</div>
-      `;
+        const rewardMessage = document.getElementById('rewardMessage');
+        const rewardText = document.getElementById('rewardText');
+        
+        if (rewardMessage && rewardText) {
+          rewardMessage.style.display = 'block';
+          rewardText.innerHTML = `
+            <div style="margin-bottom: 8px;"><strong>+${xpGain} XP!</strong></div>
+            <div><strong>Good Deed:</strong> ${goodDeed}</div>
+          `;
+        }
 
-      data.selfHelp.pendingReward = { goodDeed, xpGain };
-      saveData();
-      updateSelfHelpDisplay();
+        if (!data.selfHelp) {
+          data.selfHelp = {
+            xp: 0,
+            nextRewardDate: null,
+            habitCompletions: {},
+            goodDeeds: []
+          };
+        }
+
+        data.selfHelp.pendingReward = { goodDeed, xpGain };
+        saveData();
+        updateSelfHelpDisplay();
+      } catch (error) {
+        console.error('Error showing reward:', error);
+      }
     }
 
     function claimReward() {
-      if (data.selfHelp.pendingReward) {
-        data.selfHelp.xp += data.selfHelp.pendingReward.xpGain;
-        data.selfHelp.goodDeeds.push({
-          text: data.selfHelp.pendingReward.goodDeed,
-          date: new Date().toISOString(),
-          completed: false
-        });
-        delete data.selfHelp.pendingReward;
-        setNextReward();
-        saveData();
-        document.getElementById('rewardMessage').style.display = 'none';
-        updateSelfHelpDisplay();
-        renderGoodDeeds();
+      try {
+        if (!data.selfHelp) {
+          data.selfHelp = {
+            xp: 0,
+            nextRewardDate: null,
+            habitCompletions: {},
+            goodDeeds: []
+          };
+        }
+
+        if (data.selfHelp.pendingReward) {
+          data.selfHelp.xp = (data.selfHelp.xp || 0) + data.selfHelp.pendingReward.xpGain;
+          
+          if (!data.selfHelp.goodDeeds) {
+            data.selfHelp.goodDeeds = [];
+          }
+          
+          data.selfHelp.goodDeeds.push({
+            text: data.selfHelp.pendingReward.goodDeed,
+            date: new Date().toISOString(),
+            completed: false
+          });
+          
+          delete data.selfHelp.pendingReward;
+          setNextReward();
+          saveData();
+          
+          const rewardMessage = document.getElementById('rewardMessage');
+          if (rewardMessage) {
+            rewardMessage.style.display = 'none';
+          }
+          
+          updateSelfHelpDisplay();
+          renderGoodDeeds();
+        }
+      } catch (error) {
+        console.error('Error claiming reward:', error);
       }
     }
 
     function generateGoodDeed() {
-      const topValues = data.values.slice(0, 5);
-      const randomValue = topValues[Math.floor(Math.random() * topValues.length)];
+      try {
+        if (!data.values || data.values.length === 0) {
+          return 'Do something kind for someone today';
+        }
 
-      const deeds = {
-        'Kindness': [
-          'Pay for a stranger\'s coffee',
-          'Leave a kind note for someone',
-          'Compliment three people genuinely',
-          'Help someone carry their groceries',
-          'Send a thank you message to someone who helped you'
-        ],
-        'Service': [
-          'Volunteer for 2 hours at a local charity',
-          'Help a neighbor with a task',
-          'Mentor someone in your field',
-          'Donate items you no longer need',
-          'Spend time listening to someone who needs it'
-        ],
-        'Generosity': [
-          'Donate to a cause you care about',
-          'Share your skills by teaching someone',
-          'Give away something valuable to someone who needs it',
-          'Treat a friend to lunch',
-          'Leave a generous tip'
-        ],
-        'Community': [
-          'Organize a neighborhood gathering',
-          'Join a local community group',
-          'Introduce two people who should know each other',
-          'Participate in a community cleanup',
-          'Support a local business'
-        ],
-        'Gratitude': [
-          'Write a detailed thank you letter',
-          'Call someone to express appreciation',
-          'Share why you\'re grateful for someone publicly',
-          'Create a gratitude jar for your family',
-          'Thank someone who doesn\'t expect it'
-        ]
-      };
+        const topValues = data.values.slice(0, 5);
+        const randomValue = topValues[Math.floor(Math.random() * topValues.length)];
 
-      const valueName = randomValue.name;
-      const deedList = deeds[valueName] || [
-        'Do something kind for a stranger',
-        'Help someone in need',
-        'Express gratitude to someone',
-        'Volunteer your time',
-        'Share something valuable with others'
-      ];
+        const deeds = {
+          'Kindness': [
+            'Pay for a stranger\'s coffee',
+            'Leave a kind note for someone',
+            'Compliment three people genuinely',
+            'Help someone carry their groceries',
+            'Send a thank you message to someone who helped you'
+          ],
+          'Service': [
+            'Volunteer for 2 hours at a local charity',
+            'Help a neighbor with a task',
+            'Mentor someone in your field',
+            'Donate items you no longer need',
+            'Spend time listening to someone who needs it'
+          ],
+          'Generosity': [
+            'Donate to a cause you care about',
+            'Share your skills by teaching someone',
+            'Give away something valuable to someone who needs it',
+            'Treat a friend to lunch',
+            'Leave a generous tip'
+          ],
+          'Community': [
+            'Organize a neighborhood gathering',
+            'Join a local community group',
+            'Introduce two people who should know each other',
+            'Participate in a community cleanup',
+            'Support a local business'
+          ],
+          'Gratitude': [
+            'Write a detailed thank you letter',
+            'Call someone to express appreciation',
+            'Share why you\'re grateful for someone publicly',
+            'Create a gratitude jar for your family',
+            'Thank someone who doesn\'t expect it'
+          ]
+        };
 
-      return deedList[Math.floor(Math.random() * deedList.length)];
+        const valueName = randomValue.name;
+        const deedList = deeds[valueName] || [
+          'Do something kind for a stranger',
+          'Help someone in need',
+          'Express gratitude to someone',
+          'Volunteer your time',
+          'Share something valuable with others'
+        ];
+
+        return deedList[Math.floor(Math.random() * deedList.length)];
+      } catch (error) {
+        console.error('Error generating good deed:', error);
+        return 'Do something kind for someone today';
+      }
     }
 
     function updateSelfHelpDisplay() {
-      document.getElementById('totalXP').textContent = data.selfHelp.xp + ' XP';
-
-      if (data.selfHelp.nextRewardDate) {
-        const now = new Date();
-        const rewardDate = new Date(data.selfHelp.nextRewardDate);
-        const diff = rewardDate - now;
-
-        if (diff > 0) {
-          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-          const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-          document.getElementById('nextReward').textContent = `${days}d ${hours}h`;
-        } else {
-          document.getElementById('nextReward').textContent = 'Checking...';
-        }
+      const xpElement = document.getElementById('totalXP');
+      if (xpElement) {
+        xpElement.textContent = (data.selfHelp?.xp || 0) + ' XP';
       }
 
-      if (data.selfHelp.pendingReward) {
+      if (data.selfHelp && data.selfHelp.pendingReward) {
         showReward();
       }
 
@@ -1701,18 +1908,24 @@
 
     function renderGoodDeeds() {
       const container = document.getElementById('goodDeedsList');
+      if (!container) return;
 
-      if (data.selfHelp.goodDeeds.length === 0) {
+      if (!data.selfHelp || !data.selfHelp.goodDeeds || data.selfHelp.goodDeeds.length === 0) {
         container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🌟</div><div>Complete habits to unlock good deeds!</div></div>';
         return;
       }
 
-      container.innerHTML = data.selfHelp.goodDeeds.map((deed, i) => `
-        <div class="good-deed-item">
-          <div class="good-deed-title">${deed.text}</div>
-          <div class="good-deed-date">${formatDate(deed.date.split('T')[0])}</div>
-        </div>
-      `).join('');
+      try {
+        container.innerHTML = data.selfHelp.goodDeeds.map((deed, i) => `
+          <div class="good-deed-item">
+            <div class="good-deed-title">${deed.text}</div>
+            <div class="good-deed-date">${formatDate(deed.date.split('T')[0])}</div>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error('Error rendering good deeds:', error);
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>Error loading good deeds.</div></div>';
+      }
     }
 
     loadData();
