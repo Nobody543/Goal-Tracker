@@ -709,8 +709,11 @@
           </div>
         </div>
         <div style="margin-top: 16px; padding: 16px; background: #edf2f7; border-radius: 8px;">
-          <div style="font-size: 14px; color: #4a5568; text-align: center;">
-            Keep up your habits daily - rewards will appear at random times! 🎁
+          <div style="font-size: 14px; color: #4a5568; margin-bottom: 8px; text-align: center;">
+            <span id="daysUntilReward"></span>
+          </div>
+          <div style="font-size: 12px; color: #718096; text-align: center;">
+            Keep up your habits daily for surprise rewards! 🎁
           </div>
         </div>
         <div id="rewardMessage" style="margin-top: 16px; padding: 16px; background: #d1fae5; border-radius: 8px; display: none;">
@@ -781,6 +784,7 @@
       {name:"Openness",desc:"Being happy to exploring new paths, ideas, and experiences you know nothing of."},
       {name:"Spontaneity",desc:"Acting without planning."},
       {name:"Leadership",desc:"Helping to guide others."},
+      {name:"Service",desc:"Helping others through action."},
       {name:"Community",desc:"Valuing connections with other human beings."},
       {name:"Stability",desc:"Maintaining consistency in your actions and emotions, rather than changing state rapidly without much though."},
       {name:"Self-respect",desc:"Holding yourself to standards."},
@@ -1665,11 +1669,17 @@
                             data.selfHelp.habitCompletions[today] && 
                             data.selfHelp.habitCompletions[today].includes(habit.id)) || false;
 
+          const streak = calculateHabitStreak(habit.id);
+          const streakDisplay = streak > 0 ? `🔥 ${streak} day${streak !== 1 ? 's' : ''}` : '';
+
           return `
             <div class="habit-item ${completed ? 'completed-today' : ''}">
               <input type="checkbox" class="checkbox" ${completed ? 'checked' : ''} 
                      onchange="toggleHabit(${habit.id})">
-              <div class="goal-text">${habit.text}</div>
+              <div class="goal-text" style="flex: 1;">
+                <div>${habit.text}</div>
+                ${streakDisplay ? `<div style="font-size: 12px; color: #f59e0b; margin-top: 4px;">${streakDisplay}</div>` : ''}
+              </div>
               <button class="delete-btn" onclick="deleteHabit(${habit.id})">Delete</button>
             </div>
           `;
@@ -1680,11 +1690,44 @@
       }
     }
 
+    function calculateHabitStreak(habitId) {
+      try {
+        if (!data.selfHelp || !data.selfHelp.habitCompletions) return 0;
+
+        let streak = 0;
+        const today = new Date();
+
+        // Check backwards from today
+        for (let i = 0; i < 365; i++) {
+          const checkDate = new Date(today);
+          checkDate.setDate(checkDate.getDate() - i);
+          const dateStr = checkDate.toISOString().split('T')[0];
+
+          if (data.selfHelp.habitCompletions[dateStr] && 
+              data.selfHelp.habitCompletions[dateStr].includes(habitId)) {
+            streak++;
+          } else {
+            break;
+          }
+        }
+
+        return streak;
+      } catch (error) {
+        console.error('Error calculating streak:', error);
+        return 0;
+      }
+    }
+
     function setNextReward() {
       try {
         const randomDays = Math.floor(Math.random() * 7) + 1; // 1-7 days
         const nextDate = new Date();
         nextDate.setDate(nextDate.getDate() + randomDays);
+        
+        // Set a random time on that day (between 8 AM and 10 PM)
+        const randomHour = Math.floor(Math.random() * 14) + 8; // 8-21 (8 AM - 9 PM)
+        const randomMinute = Math.floor(Math.random() * 60);
+        nextDate.setHours(randomHour, randomMinute, 0, 0);
         
         if (!data.selfHelp) {
           data.selfHelp = {
@@ -1720,16 +1763,24 @@
         }
 
         const now = new Date();
-        const rewardDate = new Date(data.selfHelp.nextRewardDate);
+        const rewardDateTime = new Date(data.selfHelp.nextRewardDate);
 
-        if (now >= rewardDate) {
-          // Check if they've been consistent
-          const daysToCheck = Math.min(7, Math.floor((now - new Date(rewardDate.getTime() - 7 * 24 * 60 * 60 * 1000)) / (24 * 60 * 60 * 1000)));
+        // Check if we've reached the reward date AND time
+        if (now >= rewardDateTime) {
+          // Calculate the milestone date (start of the reward day)
+          const milestoneStartDate = new Date(rewardDateTime);
+          milestoneStartDate.setHours(0, 0, 0, 0);
+          
+          // Check consistency over the milestone period (days leading up to milestone)
+          const checkStartDate = new Date(milestoneStartDate);
+          checkStartDate.setDate(checkStartDate.getDate() - 7);
+          
+          const daysToCheck = Math.min(7, Math.floor((milestoneStartDate - checkStartDate) / (24 * 60 * 60 * 1000)));
           let completedDays = 0;
 
           for (let i = 0; i < daysToCheck; i++) {
-            const checkDate = new Date(now);
-            checkDate.setDate(checkDate.getDate() - i);
+            const checkDate = new Date(milestoneStartDate);
+            checkDate.setDate(checkDate.getDate() - i - 1);
             const dateStr = checkDate.toISOString().split('T')[0];
             
             if (data.selfHelp.habitCompletions[dateStr] && data.selfHelp.habitCompletions[dateStr].length > 0) {
@@ -1896,6 +1947,22 @@
       const xpElement = document.getElementById('totalXP');
       if (xpElement) {
         xpElement.textContent = (data.selfHelp?.xp || 0) + ' XP';
+      }
+
+      // Display days until next reward
+      const daysElement = document.getElementById('daysUntilReward');
+      if (daysElement && data.selfHelp && data.selfHelp.nextRewardDate) {
+        const now = new Date();
+        const rewardDate = new Date(data.selfHelp.nextRewardDate);
+        const daysUntil = Math.ceil((rewardDate - now) / (1000 * 60 * 60 * 24));
+
+        if (daysUntil > 0) {
+          daysElement.textContent = `Next milestone in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`;
+        } else if (daysUntil === 0) {
+          daysElement.textContent = 'Milestone day - reward coming soon!';
+        } else {
+          daysElement.textContent = 'Checking for reward...';
+        }
       }
 
       if (data.selfHelp && data.selfHelp.pendingReward) {
